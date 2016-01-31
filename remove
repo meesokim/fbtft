@@ -1,0 +1,4 @@
+sudo rmmod fbtft_device
+sudo rmmod fb_ili9341kd
+sudo rmmod fbtft
+
