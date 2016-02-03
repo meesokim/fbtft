@@ -1095,7 +1095,8 @@ static struct fbtft_device_display displays[] = {
 		.spi = &(struct spi_board_info) {
 			.modalias = "fb_kedei35",
 			.max_speed_hz = 32000000,
-			.mode = SPI_MODE_0,
+			.mode = SPI_MODE_3,
+			.chip_select = 1,
 			.platform_data = &(struct fbtft_platform_data) {
 				.display = {
 					.buswidth = 8,
@@ -1392,7 +1393,8 @@ static int __init fbtft_device_init(void)
 		if (strncmp(name, displays[i].name, 32) == 0) {
 			if (displays[i].spi) {
 				spi = displays[i].spi;
-				spi->chip_select = cs;
+				if (spi->chip_select == 0)
+					spi->chip_select = cs;
 				spi->bus_num = busnum;
 				if (speed)
 					spi->max_speed_hz = speed;

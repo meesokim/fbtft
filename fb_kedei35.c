@@ -23,6 +23,7 @@
 #include <linux/kernel.h>
 #include <linux/init.h>
 #include <linux/delay.h>
+#include <linux/spi/spi.h>
 
 #include "fbtft.h"
 
@@ -30,6 +31,7 @@
 #define WIDTH		320
 #define HEIGHT		480
 
+#if 0
 static int default_init_sequence[] = {
 
 	/* SLP_OUT - Sleep out */
@@ -54,13 +56,14 @@ static int default_init_sequence[] = {
 	-1, 0x29,
 	-3
 };
+#endif
 void write_reg8_kedei(struct fbtft_par *par, int len, ...)
 {
 	va_list args;
 	int i, ret;
 	u8 *buf = (u8 *)par->buf;
-	u8 db[] = {0,0,0x15};
-	u8 da[] = {0,0,0x1f};
+	u8 db[] = {0,0x15};
+	u8 da[] = {0,0x1f};
 	u8 cb[] = {0,0x11};
 	u8 ca[] = {0,0x1b};
 
@@ -75,10 +78,9 @@ void write_reg8_kedei(struct fbtft_par *par, int len, ...)
 
 	va_start(args, len);
 
-	*buf = (u8)va_arg(args, unsigned int);
-	ca[0] = *buf;
-	ret = par->fbtftops.write(par, cb, sizeof(cb));
-	ret = par->fbtftops.write(par, ca, sizeof(ca));
+	cb[0] = (u8)va_arg(args, unsigned int);
+	ret = spi_write(par->spi, cb, 2);
+	ret += spi_write(par->spi, ca, 2);
 	if (ret < 0) {
 		va_end(args);
 		dev_err(par->info->device, "%s: write() failed and returned %d\n", __func__, ret);
@@ -89,9 +91,9 @@ void write_reg8_kedei(struct fbtft_par *par, int len, ...)
 	if (len) {
 		i = len;
 		while (i--) {
-			da[1] = (u8)va_arg(args, unsigned int);
-			par->fbtftops.write(par, db, sizeof(db));
-			ret = par->fbtftops.write(par, da, sizeof(da));
+			db[0] = (u8)va_arg(args, unsigned int);
+			ret = spi_write(par->spi, db, 2);
+			ret += spi_write(par->spi, da, 2);
 			if (ret < 0) {
 				va_end(args);
 				dev_err(par->info->device, "%s: write() failed and returned %d\n", __func__, ret);
@@ -105,9 +107,9 @@ void write_reg8_kedei(struct fbtft_par *par, int len, ...)
 int write_vmem_kedei(struct fbtft_par *par, size_t offset, size_t len)
 {
 	u8 db[] = {0,0,0x15};
-	u8 da[] = {0,0,0x1f};
+	u8 da[] = {0,0x1f};
 	//u16 *data = (u16 *)&da[0];
-	u16 *vmem16;
+	u8 *vmem8;
 //	u16 *txbuf16 = (u16 *)par->txbuf.buf;
 	size_t remain;
 //	size_t to_copy;
@@ -120,22 +122,22 @@ int write_vmem_kedei(struct fbtft_par *par, size_t offset, size_t len)
 		__func__, offset, len);
 
 	remain = len / 2;
-	vmem16 = (u16 *)(par->info->screen_base + offset);
+	vmem8 = (u8 *)(par->info->screen_base + offset);
 	while (remain--)
 	{
 		//*data = *vmem16;
-		da[0] = *vmem16 >> 8;
-		da[1] = *vmem16 & 0xff;
-		par->fbtftops.write(par, db, sizeof(db));
-		ret = par->fbtftops.write(par, da, sizeof(da));		
+		db[0] = *(vmem8+1);
+		db[1] = *vmem8;
+		ret = spi_write(par->spi, db, 3);
+		ret += spi_write(par->spi, da, 2);		
 		if (ret < 0)
 			return ret;		
-		vmem16++;
+		vmem8+=2;
 	}
 #if 0	
 	/* non buffered write */
 	if (!par->txbuf.buf)
-		return par->fbtftops.write(par, vmem16, len);
+		return spi_write(par->spi, vmem16, len);
 
 	/* buffered write */
 	tx_array_size = par->txbuf.len / 2;
@@ -156,7 +158,7 @@ int write_vmem_kedei(struct fbtft_par *par, size_t offset, size_t len)
 			txbuf16[i] = cpu_to_be16(vmem16[i]);
 
 		vmem16 = vmem16 + to_copy;
-		ret = par->fbtftops.write(par, par->txbuf.buf,
+		ret = spi_write(par->spi, par->txbuf.buf,
 						startbyte_size + to_copy * 2);
 		if (ret < 0)
 			return ret;
